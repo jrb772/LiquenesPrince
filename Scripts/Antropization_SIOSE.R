@@ -1,26 +1,33 @@
 rm(list=ls())
 set.seed(10)
 setwd("~")
-buffdist = 250
+buffdist = 500
 
 # Librerias####
 options(timeout=10000)
 extrafont::loadfonts(device="win")
 pacman::p_load(terra, exactextractr, dplyr, sf, readr, raster, vegan, tidyr) 
 
+
 # Leer shapefile ####
 SIOSE <- vect("~/GIS/España/Usos del suelo/36_Pontevedra.gpkg", layer="SAR_36_T_COMBINADA")
 Leyenda_SIOSE <- read_csv2("~/GIS/Baleares/Usos del suelo/SIOSE/2017/Leyenda_SIOSE_2017.csv")
-levels(SIOSE) <- data.frame(id=Leyenda_SIOSE$ID, ANTR=Leyenda_SIOSE$Type)
 CRS <- crs(SIOSE)
 
 Sites_data <- vect("D:/CloudDrive/OneDrive - Universitat de les Illes Balears/Investigación/Liquenes Prince/Zonas_Liquenes.gpkg")
 Sites <- project(Sites_data, CRS)
 SIOSE <- crop(SIOSE, ext(Sites)+1000)
-SIOSE <- rasterize(SIOSE, )
+r <- rast(ext(SIOSE))
+res(r) <- 10
+crs(r) <- CRS
+
+
+SIOSEr <- rasterize(SIOSE, r, field="ID_COBERTURA_MAX", fun=max)
+levels(SIOSEr) <- data.frame(id=Leyenda_SIOSE$ID, ANTR=Leyenda_SIOSE$Type)
+names(SIOSEr)
 buffers <- terra::buffer(Sites, width = buffdist)
 
-terra::plot(SIOSE)
+terra::plot(SIOSEr)
 terra::plot(buffers, add=T, col="blue")
 terra::plot(Sites, add=T, col="red")
 
@@ -39,7 +46,7 @@ sum_cover <- function(x){
 }
 
 #extract the area of each raster cell covered by the plot and summarize
-SIOSE_extracted <- exactextractr::exact_extract(SIOSE, buffers, coverage_area = TRUE, 
+SIOSE_extracted <- exactextractr::exact_extract(SIOSEr, buffers, coverage_area = TRUE, 
                                                 summarize_df = TRUE, fun = sum_cover, stack_apply = T)
 names(SIOSE_extracted) <- buffers$Name
 
@@ -50,7 +57,6 @@ Area2 <- Area %>%
   inner_join(Leyenda_SIOSE, by = join_by(ID)) %>%
   group_by(Name, Type) %>%
   summarize(Nat_Ar = sum(proportion)) %>%
-  filter(Type == "Natural") %>%
   arrange(Nat_Ar)
 Area2
 
